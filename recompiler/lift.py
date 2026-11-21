@@ -30,7 +30,10 @@ _ap.add_argument('exe', nargs='?', default='game/Game.exe')
 _ap.add_argument('out', nargs='?', default='build/gen')
 _ap.add_argument('--extra', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'extra_entries.txt'))
 _ap.add_argument('--files', type=int, default=16, help='number of generated code_NNN.c files')
+_ap.add_argument('--module', action='store_true',
+                 help='build for a gamecode shared library: import shims become thunks through slots the host fills')
 _args = _ap.parse_args()
+MODULE = _args.module
 GAME, OUT, EXTRA, NFILES = _args.exe, _args.out, _args.extra, _args.files
 
 pe = pefile.PE(GAME)
@@ -1010,10 +1013,18 @@ with open(os.path.join(OUT, 'importtable.c'), 'w') as f:
         f.write(f'  {{0x{slot:x}u, "{dll}", "{nm}", IMP_{dll}_{nm}}},\n')
     f.write('};\nconst unsigned g_imports_count = %d;\n' % len(imp_sorted))
 
-with open(os.path.join(OUT, 'imports_weak.c'), 'w') as f:
+with open(os.path.join(OUT, 'imports_glue.c'), 'w') as f:
     f.write('#include "imports.h"\n#include "runtime.h"\n')
-    for slot, (dll, nm) in imp_sorted:
-        f.write(f'__attribute__((weak)) void IMP_{dll}_{nm}(CPU *c) {{ rt_missing_import(c, "{dll}", "{nm}"); }}\n')
+    if MODULE:
+        # module: the host fills g_import_slots by name (runtime/module.c); thunks stay hidden in the module
+        f.write(f'GuestFn g_import_slots[{len(imp_sorted)}];\n')
+        for i, (slot, (dll, nm)) in enumerate(imp_sorted):
+            f.write(f'void IMP_{dll}_{nm}(CPU *c) {{ GuestFn f = g_import_slots[{i}]; if (f) f(c); else rt_missing_import(c, "{dll}", "{nm}"); }}\n')
+    else:
+        # static build: the runtime's strong definitions replace these at link time
+        f.write('GuestFn *const g_import_slots = 0;\n')
+        for slot, (dll, nm) in imp_sorted:
+            f.write(f'__attribute__((weak)) void IMP_{dll}_{nm}(CPU *c) {{ rt_missing_import(c, "{dll}", "{nm}"); }}\n')
 # image blob
 with open(os.path.join(OUT, 'image.c'), 'w') as f:
     f.write('// PE image of Game.exe mapped at IMAGE_BASE (data + code bytes for data references)\n')
@@ -1026,6 +1037,25 @@ with open(os.path.join(OUT, 'meta.h'), 'w') as f:
     f.write(f'#pragma once\n#define IMAGE_BASE 0x{BASE:x}u\n#define IMAGE_SIZE 0x{SIZE:x}u\n#define ENTRY_POINT 0x{entry_point:x}u\n')
     f.write(f'#define CODE_LO 0x{CODE_LO:x}u\n#define CODE_HI 0x{CODE_HI:x}u\n')
     f.write(f'#define STACK_RESERVE 0x{pe.OPTIONAL_HEADER.SizeOfStackReserve:x}u\n')
+
+# exported descriptor (runtime.h PhobiaModule)
+import hashlib
+_h = hashlib.sha256(pe.__data__)
+_t = hashlib.sha256()
+for _f in ('lift.py', 'patches.py'):
+    _t.update(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), _f), 'rb').read())
+translator_id = f'exe {_h.hexdigest()[:12]} recompiler {_t.hexdigest()[:12]}'
+with open(os.path.join(OUT, 'module.c'), 'w') as f:
+    f.write('#include "runtime.h"\n#include "meta.h"\n')
+    f.write('extern const unsigned char g_image[];\nextern const unsigned g_image_size;\n')
+    f.write('extern const FuncEntry g_functable[];\nextern const unsigned g_functable_count;\n')
+    f.write('extern const ImportEntry g_imports[];\nextern const unsigned g_imports_count;\n')
+    f.write('extern const SmcRoutine g_smc[];\nextern const unsigned g_smc_count;\n')
+    f.write(('extern GuestFn g_import_slots[];\n' if MODULE else 'extern GuestFn *const g_import_slots;\n'))
+    f.write('__attribute__((visibility("default"))) const PhobiaModule phobia_module = {\n')
+    f.write('  PHOBIA_MODULE_VERSION, IMAGE_BASE, IMAGE_SIZE, ENTRY_POINT, CODE_LO, CODE_HI, STACK_RESERVE,\n')
+    f.write(f'  g_image, g_functable, {len(func_list)}, g_imports, {len(imp_sorted)}, g_smc, {len(smc_routines)},\n')
+    f.write(f'  {"g_import_slots" if MODULE else "0"}, "{translator_id}"\n}};\n')
 
 print('unsupported:', dict(unsupported), file=sys.stderr)
 print(f'functions={len(func_list)} files={len(files)}', file=sys.stderr)

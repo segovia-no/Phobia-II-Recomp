@@ -5,7 +5,9 @@
 #include <pthread.h>
 #include <strings.h>
 #include <unistd.h>
+#ifdef __APPLE__
 #include <AudioToolbox/AudioToolbox.h>
+#endif
 
 /* ------------------------------------------------------------------ joystick */
 static SDL_GameController *g_pad;
@@ -47,6 +49,7 @@ void IMP_WINMM_joyGetPos(CPU *c) {
 }
 
 /* ------------------------------------------------------------------ MCI sequencer */
+#ifdef __APPLE__
 static MusicPlayer g_player;
 static MusicSequence g_seq;
 static MusicTimeStamp g_seq_len;
@@ -60,7 +63,7 @@ static void midi_close(void) {
     g_playing = 0; g_notify = 0;
 }
 static int midi_open(const char *gpath) {
-    char hp[1024]; host_path(gpath, hp, sizeof hp);
+    char hp[HOST_PATH_MAX]; host_path(gpath, hp, sizeof hp);
     midi_close();
     CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)hp, (CFIndex)strlen(hp), false);
     if (NewMusicSequence(&g_seq) != noErr) return 0;
@@ -128,3 +131,15 @@ void IMP_WINMM_mciSendStringA(CPU *c) {
     pthread_mutex_unlock(&g_midi_lock);
     STDRET(4, rc);
 }
+#else
+/* No system MIDI synth to rely on outside macOS. The game uses MCI only for its optional MIDI music
+   (the default settings use the module player), so commands succeed silently. No completion notice is
+   posted: the game re-issues "play ... notify" when it gets one, which would spin. */
+void IMP_WINMM_mciSendStringA(CPU *c) {
+    const char *cmd = HS(ARG(0)); uint32_t ret = ARG(1), retlen = ARG(2);
+    static int warned;
+    if (!warned++) rt_log("MIDI music is not available on this platform (mciSendString \"%s\")", cmd);
+    if (ret && retlen) M[ret] = 0;
+    STDRET(4, 0);
+}
+#endif

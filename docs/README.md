@@ -8,3 +8,4 @@
 | [04 — Runtime](notes/04-runtime.md) | guest memory, threads, Win32 and DirectX shims |
 | [05 — Bugs found while bringing it up](notes/05-bringup-log.md) | translator/runtime bugs and how each showed up |
 | [06 — Roadmap](notes/06-roadmap.md) | open issues and next steps |
+| [07 — Builder, Linux port, release kits](notes/07-builder.md) | host + game-code module, `build_gamecode.py`, kits |

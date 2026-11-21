@@ -1,6 +1,5 @@
 // Core runtime: guest memory, image loading, dispatcher, thunks, x87 helpers, threads, faults.
 #include "runtime.h"
-#include "meta.h"
 #include <sys/mman.h>
 #include <signal.h>
 #include <pthread.h>
@@ -13,7 +12,7 @@
 
 uint8_t *M;
 int g_trace;
-char g_game_dir[1024];
+char g_game_dir[HOST_PATH_MAX];
 
 /* ------------------------------------------------------------------ logging */
 static pthread_mutex_t g_log_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -213,17 +212,19 @@ uint32_t thunk_register(GuestFn fn, const char *name) {
     return THUNK_BASE + 16 * i;
 }
 uint32_t thunk_for_import(const char *dll, const char *name) {
-    for (unsigned i = 0; i < g_imports_count; i++) {
-        if (!strcasecmp(g_imports[i].name, name)) return thunk_register(g_imports[i].fn, g_imports[i].name);
+    for (unsigned i = 0; i < G->imports_count; i++) {
+        if (!strcasecmp(G->imports[i].name, name)) return thunk_register(G->imports[i].fn, G->imports[i].name);
     }
     return 0;
 }
 
 /* ------------------------------------------------------------------ dispatcher */
-static GuestFn *g_code;   /* indexed by addr - CODE_LO */
+static GuestFn *g_code;   /* indexed by addr - code_lo */
+static uint32_t g_code_lo, g_code_hi;
 static void build_code_table(void) {
-    g_code = calloc(CODE_HI - CODE_LO, sizeof(GuestFn));
-    for (unsigned i = 0; i < g_functable_count; i++) g_code[g_functable[i].addr - CODE_LO] = g_functable[i].fn;
+    g_code_lo = G->code_lo; g_code_hi = G->code_hi;
+    g_code = calloc(g_code_hi - g_code_lo, sizeof(GuestFn));
+    for (unsigned i = 0; i < G->functable_count; i++) g_code[G->functable[i].addr - g_code_lo] = G->functable[i].fn;
 }
 static int smc_matches(const SmcRoutine *r, uint32_t t) {
     uint32_t n = r->end - r->start;
@@ -232,8 +233,8 @@ static int smc_matches(const SmcRoutine *r, uint32_t t) {
     return 1;
 }
 void dispatch(CPU *c, uint32_t t) {
-    if (t >= CODE_LO && t < CODE_HI) {
-        GuestFn f = g_code[t - CODE_LO];
+    if (t >= g_code_lo && t < g_code_hi) {
+        GuestFn f = g_code[t - g_code_lo];
         if (f) { f(c); return; }
         rt_fatal("dispatch: no compiled entry at %08x (add to recomp/tools/extra_entries.txt and regenerate); return address %08x", t, RD32(c->esp));
     }
@@ -251,19 +252,19 @@ void dispatch(CPU *c, uint32_t t) {
         static __thread uint32_t cache_addr[64]; static __thread int cache_idx[64];
         unsigned h = (t >> 4) & 63;
         int idx = -1;
-        if (cache_addr[h] == t && smc_matches(&g_smc[cache_idx[h]], t)) idx = cache_idx[h];
+        if (cache_addr[h] == t && smc_matches(&G->smc[cache_idx[h]], t)) idx = cache_idx[h];
         else {
             uint32_t best_len = 0;
-            for (unsigned i = 0; i < g_smc_count; i++) {
-                const SmcRoutine *r = &g_smc[i]; uint32_t n = r->end - r->start;
+            for (unsigned i = 0; i < G->smc_count; i++) {
+                const SmcRoutine *r = &G->smc[i]; uint32_t n = r->end - r->start;
                 if (n > best_len && smc_matches(r, t)) { idx = (int)i; best_len = n; }
             }
             if (idx >= 0) {
-                if (cache_addr[h] != t || cache_idx[h] != idx) rt_log("SMC: heap code %08x = copy of %08x", t, g_smc[idx].start);
+                if (cache_addr[h] != t || cache_idx[h] != idx) rt_log("SMC: heap code %08x = copy of %08x", t, G->smc[idx].start);
                 cache_addr[h] = t; cache_idx[h] = idx;
             }
         }
-        if (idx >= 0) { c->smc_delta = t - g_smc[idx].start; g_smc[idx].fn(c); return; }
+        if (idx >= 0) { c->smc_delta = t - G->smc[idx].start; G->smc[idx].fn(c); return; }
     }
     if (t >= 0x10000 && t < 0xF0000000u) {
         fprintf(stderr, "bytes at %08x:", t);
@@ -368,7 +369,7 @@ static int resolve_ci(const char *dir, const char *name, char *out, size_t n) {
     return found;
 }
 const char *host_path(const char *gp, char *buf, size_t n) {
-    char tmp[1024]; size_t j = 0;
+    char tmp[HOST_PATH_MAX]; size_t j = 0;
     const char *p = gp;
     if (isalpha((unsigned char)p[0]) && p[1] == ':') p += 2;   /* drop drive letter */
     for (; *p && j < sizeof(tmp) - 1; p++) tmp[j++] = (*p == '\\') ? '/' : *p;
@@ -382,10 +383,10 @@ const char *host_path(const char *gp, char *buf, size_t n) {
         else { snprintf(buf, n, "%s", s); return buf; }
     }
     /* walk components case-insensitively, relative to game dir */
-    char cur[1024]; snprintf(cur, sizeof cur, "%s", g_game_dir);
+    char cur[HOST_PATH_MAX]; snprintf(cur, sizeof cur, "%s", g_game_dir);
     char *save, *comp = strtok_r(s, "/", &save);
     while (comp) {
-        char next[1024];
+        char next[HOST_PATH_MAX];
         if (!strcmp(comp, ".")) { comp = strtok_r(NULL, "/", &save); continue; }
         if (resolve_ci(cur, comp, next, sizeof next)) snprintf(cur, sizeof cur, "%s", next);
         else { size_t l = strlen(cur); snprintf(cur + l, sizeof cur - l, "/%s", comp); }
@@ -419,12 +420,10 @@ void mem_init(void) {
 }
 
 /* load image + patch IAT */
-extern const unsigned char g_image[];
-extern const unsigned g_image_size;
 void image_load(void) {
-    memcpy(M + IMAGE_BASE, g_image, g_image_size);
-    for (unsigned i = 0; i < g_imports_count; i++)
-        WR32(g_imports[i].slot, thunk_register(g_imports[i].fn, g_imports[i].name));
+    memcpy(M + G->image_base, G->image, G->image_size);
+    for (unsigned i = 0; i < G->imports_count; i++)
+        WR32(G->imports[i].slot, thunk_register(G->imports[i].fn, G->imports[i].name));
     build_code_table();
 }
 

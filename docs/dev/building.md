@@ -1,8 +1,9 @@
 # Building from source
 
 ## Requirements
-- macOS (Apple Silicon or Intel), Xcode command line tools (`clang`)
-- `brew install sdl2 cmake`
+- macOS (Apple Silicon or Intel): Xcode command line tools (`clang`), `brew install sdl2 cmake`
+- Linux (x86-64 or arm64): a C compiler, CMake 3.16+, SDL2 development files
+  (Debian/Ubuntu: `sudo apt install build-essential cmake libsdl2-dev python3-venv`)
 - Python 3.10+ (the setup script creates `.venv` with `capstone` and `pefile`)
 - Your copy of Phobia II v2.0: a folder with `Game.exe`, `pics/`, `sounds/`, `dat/`
 
@@ -21,6 +22,31 @@ cmake --build build -j
 The translation step is a custom command: editing `recompiler/lift.py` or `recompiler/extra_entries.txt` re-runs it.
 
 Running: `build/phobia2` finds the game folder in this order: `$PHOBIA_DATA`, next to the binary (`.`, `game/`, `../game`, `../../game`), the current directory. Writes (high scores, config) go to the game folder, as the original did.
+
+## Host program + game-code module
+`-DPHOBIA_GAME_MODULE=ON` builds `phobia2` without translated code plus `gamecode.so` / `gamecode.dylib`
+next to it (without a `Game.exe`, the program only). The module can also be built on its own, for any
+target, with `recompiler/build_gamecode.py` (system `cc` or `zig cc`):
+```sh
+.venv/bin/python recompiler/build_gamecode.py --exe game/Game.exe --out build/gamecode
+PHOBIA_GAME_MODULE=build/gamecode/gamecode.dylib ./build-mod/phobia2
+```
+Design and measurements: [notes/07](../notes/07-builder.md).
+
+## Release kits
+```sh
+scripts/release/build_kit.sh linux-x86_64      # or linux-arm64, macos-arm64, macos-x86_64 [version]
+```
+It runs the three steps, which can also be run alone:
+```sh
+.venv/bin/python scripts/release/fetch_tools.py --platform linux-x86_64 --out build/tools/linux-x86_64
+scripts/release/build_linux_host.sh x86_64            # Docker; or build_macos_host.sh arm64 on a Mac
+.venv/bin/python scripts/release/package.py --platform linux-x86_64 \
+    --host build-linux-x86_64/phobia2 --tools build/tools/linux-x86_64
+```
+Platforms: `macos-arm64`, `macos-x86_64`, `linux-x86_64`, `linux-arm64`. The kit (`build/release/*.tar.gz`)
+contains no game code: its `phobia2.sh` builds the module from the player's `Game.exe` with the bundled
+Python and zig on first start.
 
 ## Debug builds and developer aids
 | CMake option | Effect |

@@ -10,6 +10,7 @@ game/Game.exe ──► recompiler/lift.py ──► build/gen/*.c ──┐
 | Path | |
 |---|---|
 | `recompiler/lift.py` | the static recompiler (Python, capstone + pefile) |
+| `recompiler/build_gamecode.py` | builds the game-code module for a target (system cc or zig) |
 | `recompiler/patches.py` | fixes for original-game bugs at single instructions |
 | `recompiler/extra_entries.txt` | extra code entry points the analysis cannot find |
 | `runtime/cpu.h` | guest CPU state, memory accessors, x87 macros used by generated code |
@@ -20,8 +21,10 @@ game/Game.exe ──► recompiler/lift.py ──► build/gen/*.c ──┐
 | `runtime/audio.c` | DirectSound buffers + waveOut stream mixed in an SDL audio callback |
 | `runtime/dinput.c` | DirectInput keyboard |
 | `runtime/winmm.c` | joystick (SDL GameController), MCI MIDI sequencer (AudioToolbox MusicPlayer) |
+| `runtime/module.c` | finds the game code: linked in, or loads `gamecode.so`/`.dylib` and fills its import slots |
 | `runtime/main.c` | host entry |
 | `scripts/dev/` | e2e runner, headless stress runner, disassembler |
+| `scripts/release/` | tool pins + fetcher, Linux/macOS host builds, kit packager |
 | `scripts/setup/set_keys.py` | rebind keys in the game's key files |
 | `docs/` | guides and notes |
 

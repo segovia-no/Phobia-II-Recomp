@@ -7,11 +7,12 @@
   4 × 5-minute headless stress runs without a fault.
 - Keyboard fire on Ctrl via `scripts/setup/set_keys.py`.
 
+- Linux port (x86-64, arm64) and the builder / release kits ([07](07-builder.md)): host without game code,
+  `recompiler/build_gamecode.py`, kits tested as a player gets them (bare Debian container, macOS 11 target).
+
 ## Next
-- **Linux port** (x86-64 and arm64; Steam Deck): portable runtime, Docker-tested headless.
-- **Builder / packaging** like MotoRacerRecomp: host program without game code + `gamecode` module built on
-  the player's machine by `recompiler/build_gamecode.py` (bundled `zig cc` + standalone Python), per-platform
-  release kits.
+- Play-test the Linux build on real hardware (desktop, Steam Deck desktop mode).
+- CI (GitHub Actions): build kits on tags, attach to Releases; first-run UI inside the program.
 - MIDI on Linux (the MCI sequencer path; unused by the default settings).
 - Two-player mode and the in-game key setup menu: play-test.
 - Performance: keep guest registers in C locals across instructions (every access goes through `c->` today).

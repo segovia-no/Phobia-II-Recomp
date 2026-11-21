@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build Phobia II Recomp from your own copy of the game.
 #   ./setup.sh [path/to/game-folder]     (default: ./game)
-# Needs: python3, cmake, a C compiler, SDL2 (brew install sdl2 cmake).
+# Needs: python3, cmake, a C compiler, SDL2 (macOS: brew install sdl2 cmake;
+# Debian/Ubuntu: sudo apt install build-essential cmake libsdl2-dev python3-venv).
 set -euo pipefail
 cd "$(dirname "$0")"
 GAME_DIR="${1:-$PWD/game}"

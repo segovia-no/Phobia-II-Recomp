@@ -9,12 +9,23 @@ typedef struct { uint32_t addr; GuestFn fn; } FuncEntry;
 typedef struct { uint32_t slot; const char *dll; const char *name; GuestFn fn; } ImportEntry;
 
 typedef struct { uint32_t start, end; const unsigned char *mask; GuestFn fn; } SmcRoutine;
-extern const SmcRoutine g_smc[];
-extern const unsigned g_smc_count;
-extern const FuncEntry g_functable[];
-extern const unsigned g_functable_count;
-extern const ImportEntry g_imports[];
-extern const unsigned g_imports_count;
+
+/* Everything the runtime needs from the translated game code, in one exported descriptor.
+   Static builds link it (phobia_module in the generated module.c); module builds load it from
+   gamecode.so / gamecode.dylib (runtime/module.c). Bump the version when the layout changes. */
+#define PHOBIA_MODULE_VERSION 1
+typedef struct {
+    uint32_t version;
+    uint32_t image_base, image_size, entry_point, code_lo, code_hi, stack_reserve;
+    const unsigned char *image;
+    const FuncEntry *functable; unsigned functable_count;
+    const ImportEntry *imports; unsigned imports_count;
+    const SmcRoutine *smc; unsigned smc_count;
+    GuestFn *import_slots;          /* module builds: the host fills these with its shims (NULL: static) */
+    const char *translator_id;      /* identifies recompiler + Game.exe, for cache checks */
+} PhobiaModule;
+extern const PhobiaModule *G;       /* set by module_load() */
+const PhobiaModule *module_load(void);
 
 /* magic host-thunk address space */
 #define THUNK_BASE 0xFFF00000u
@@ -43,7 +54,8 @@ void rt_fatal(const char *fmt, ...) __attribute__((noreturn, format(printf, 1, 2
 void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 extern int g_trace;
 const char *host_path(const char *guest_path, char *buf, size_t n);  /* map DOS path -> host */
-extern char g_game_dir[1024];
+#define HOST_PATH_MAX 4096   /* glibc realpath() and fortified builds expect PATH_MAX buffers */
+extern char g_game_dir[HOST_PATH_MAX];
 
 /* COM helper: build object with vtable of host thunks; returns guest pointer to object */
 uint32_t com_make_object(const GuestFn *methods, const char *const *names, int nmethods, uint32_t extra_bytes, void *host);

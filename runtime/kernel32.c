@@ -25,7 +25,7 @@ typedef struct {
     /* threads */
     pthread_t th; int finished;
     /* find */
-    DIR *dir; char dirpath[1024]; char pattern[260];
+    DIR *dir; char dirpath[HOST_PATH_MAX]; char pattern[260];
 } Handle;
 static Handle *g_handles[MAX_HANDLES];
 static pthread_mutex_t g_handles_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -174,7 +174,7 @@ void IMP_KERNEL32_WriteConsoleA(CPU *c) {
 /* ------------------------------------------------------------------ files */
 void IMP_KERNEL32_CreateFileA(CPU *c) {
     const char *gp = HS(ARG(0)); uint32_t access = ARG(1), disp = ARG(4);
-    char hp[1024]; host_path(gp, hp, sizeof hp);
+    char hp[HOST_PATH_MAX]; host_path(gp, hp, sizeof hp);
     int fl = 0;
     if ((access & 0xC0000000u) == 0xC0000000u) fl = O_RDWR;
     else if (access & 0x40000000u) fl = O_WRONLY;
@@ -231,20 +231,20 @@ void IMP_KERNEL32_CloseHandle(CPU *c) {
     if (h >= 16) handle_free(h);
     STDRET(1, 1);
 }
-void IMP_KERNEL32_DeleteFileA(CPU *c) { char hp[1024]; host_path(HS(ARG(0)), hp, sizeof hp); STDRET(1, unlink(hp) == 0); }
+void IMP_KERNEL32_DeleteFileA(CPU *c) { char hp[HOST_PATH_MAX]; host_path(HS(ARG(0)), hp, sizeof hp); STDRET(1, unlink(hp) == 0); }
 void IMP_KERNEL32_MoveFileA(CPU *c) {
-    char a[1024], b[1024]; host_path(HS(ARG(0)), a, sizeof a); host_path(HS(ARG(1)), b, sizeof b);
+    char a[HOST_PATH_MAX], b[HOST_PATH_MAX]; host_path(HS(ARG(0)), a, sizeof a); host_path(HS(ARG(1)), b, sizeof b);
     STDRET(2, rename(a, b) == 0);
 }
 void IMP_KERNEL32_GetFileAttributesA(CPU *c) {
-    char hp[1024]; host_path(HS(ARG(0)), hp, sizeof hp);
+    char hp[HOST_PATH_MAX]; host_path(HS(ARG(0)), hp, sizeof hp);
     struct stat st;
     if (stat(hp, &st)) { g_last_error = 2; STDRET(1, 0xFFFFFFFFu); return; }
     STDRET(1, S_ISDIR(st.st_mode) ? 0x10 : 0x20);
 }
 void IMP_KERNEL32_GetFullPathNameA(CPU *c) {
     const char *n = HS(ARG(0)); uint32_t len = ARG(1), buf = ARG(2), fp = ARG(3);
-    char tmp[1024];
+    char tmp[HOST_PATH_MAX];
     if (n[0] && n[1] == ':') snprintf(tmp, sizeof tmp, "%s", n);
     else if (n[0] == '\\') snprintf(tmp, sizeof tmp, "C:%s", n);
     else snprintf(tmp, sizeof tmp, "C:\\PHOBIA2\\%s", n);
@@ -264,7 +264,7 @@ void IMP_KERNEL32_GetCurrentDirectoryA(CPU *c) {
 }
 void IMP_KERNEL32_SetCurrentDirectoryA(CPU *c) { STDRET(1, 1); }
 void IMP_KERNEL32__lopen(CPU *c) {
-    char hp[1024]; host_path(HS(ARG(0)), hp, sizeof hp);
+    char hp[HOST_PATH_MAX]; host_path(HS(ARG(0)), hp, sizeof hp);
     uint32_t mode = ARG(1) & 3;
     int fd = open(hp, mode == 0 ? O_RDONLY : mode == 1 ? O_WRONLY : O_RDWR);
     if (g_trace) rt_log("_lopen(%s) = %d", hp, fd);
@@ -308,7 +308,7 @@ static int find_fill(Handle *x, uint32_t fd) {
     while ((e = readdir(x->dir))) {
         if (fnmatch(x->pattern, e->d_name, FNM_CASEFOLD) == 0 ||
             (!strcmp(x->pattern, "*.*"))) {
-            char p[2048]; snprintf(p, sizeof p, "%s/%s", x->dirpath, e->d_name);
+            char p[HOST_PATH_MAX * 2]; snprintf(p, sizeof p, "%s/%s", x->dirpath, e->d_name);
             struct stat st; stat(p, &st);
             memset(M + fd, 0, 320);
             WR32(fd, S_ISDIR(st.st_mode) ? 0x10 : 0x20);
@@ -323,7 +323,7 @@ static int find_fill(Handle *x, uint32_t fd) {
 }
 void IMP_KERNEL32_FindFirstFileA(CPU *c) {
     const char *gp = HS(ARG(0)); uint32_t fd = ARG(1);
-    char hp[1024]; host_path(gp, hp, sizeof hp);
+    char hp[HOST_PATH_MAX]; host_path(gp, hp, sizeof hp);
     char *slash = strrchr(hp, '/');
     uint32_t h = handle_new(HT_FIND); Handle *x = handle_get(h);
     if (slash) { *slash = 0; snprintf(x->dirpath, sizeof x->dirpath, "%s", hp); snprintf(x->pattern, sizeof x->pattern, "%s", slash + 1); }
