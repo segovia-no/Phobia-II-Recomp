@@ -13,16 +13,16 @@ This is a *static recompilation*: the original Windows executable (`Game.exe`, W
 | Area | State |
 |---|---|
 | Boot, Watcom C runtime, WinMain, threads | working |
-| Color-depth menu, title screen, gameplay rendering (8-bit palette and 16-bit) | working |
+| Colour-depth menu, title, gameplay, light effects, death effect, high scores | working |
 | Keyboard (DirectInput + window messages) | working |
-| Sound effects and music mixer (DirectSound streaming, self-modifying mixer) | working, being tuned |
-| MIDI music (MCI sequencer) | via macOS AudioToolbox |
+| Sound effects and music (DirectSound streaming, the game's self-modifying mixer) | working |
+| MIDI music (MCI sequencer, not used by default) | via macOS AudioToolbox |
 | Gamepad (WinMM joystick) | via SDL GameController |
 
 ## Quick start (macOS)
 ```sh
 brew install sdl2 cmake
-git clone <this repo> PhobiaIIRecomp && cd PhobiaIIRecomp
+git clone https://github.com/segovia-no/Phobia-II-Recomp.git && cd Phobia-II-Recomp
 cp -R /path/to/your/Phobia2 game      # folder with Game.exe, pics/, sounds/, dat/
 ./setup.sh                            # makes .venv, recompiles Game.exe, builds build/phobia2
 ./build/phobia2
@@ -37,7 +37,7 @@ cp -R /path/to/your/Phobia2 game      # folder with Game.exe, pics/, sounds/, da
 | [Technical notes](docs/README.md) | target analysis, translator, self-modifying mixer, runtime notes |
 
 ## Contributing
-Bug reports and pull requests are welcome: see **[CONTRIBUTING.md](CONTRIBUTING.md)** (above all: no game files in the repository).
+Bug reports and pull requests are welcome: [open an issue](https://github.com/segovia-no/Phobia-II-Recomp/issues/new/choose) or see **[CONTRIBUTING.md](CONTRIBUTING.md)** (above all: no game files in the repository).
 
 ## Distribution and legal
 The recompiler, runtime and documentation are released under the [MIT License](LICENSE); the license does not cover Phobia II itself or anything generated from it. What the build produces — the generated C in `build/gen/` and the `phobia2` binary — contains code translated from your `Game.exe` and must not be redistributed.
