@@ -222,6 +222,12 @@ static void build_code_table(void) {
     g_code = calloc(CODE_HI - CODE_LO, sizeof(GuestFn));
     for (unsigned i = 0; i < g_functable_count; i++) g_code[g_functable[i].addr - CODE_LO] = g_functable[i].fn;
 }
+static int smc_matches(const SmcRoutine *r, uint32_t t) {
+    uint32_t n = r->end - r->start;
+    const uint8_t *live = M + t, *orig = M + r->start;
+    for (uint32_t k = 0; k < n; k++) if (r->mask[k] && live[k] != orig[k]) return 0;
+    return 1;
+}
 void dispatch(CPU *c, uint32_t t) {
     if (t >= CODE_LO && t < CODE_HI) {
         GuestFn f = g_code[t - CODE_LO];
@@ -236,18 +242,23 @@ void dispatch(CPU *c, uint32_t t) {
         }
     }
     if (t >= 0x10000 && t < THUNK_BASE) {
-        /* heap copy of a self-modifying routine? match fixed opcode bytes */
-        static uint32_t cache_addr[64]; static int cache_idx[64];
+        /* Heap copy of a self-modifying routine? Match its fixed opcode bytes (operand fields are masked
+           out). The player reuses heap buffers for different routines, so a cached match is re-verified on
+           every call; among matches the longest routine wins (a short routine can match a longer one's prefix). */
+        static __thread uint32_t cache_addr[64]; static __thread int cache_idx[64];
         unsigned h = (t >> 4) & 63;
         int idx = -1;
-        if (cache_addr[h] == t) idx = cache_idx[h];
+        if (cache_addr[h] == t && smc_matches(&g_smc[cache_idx[h]], t)) idx = cache_idx[h];
         else {
-            for (unsigned i = 0; i < g_smc_count && idx < 0; i++) {
-                const SmcRoutine *r = &g_smc[i]; uint32_t n = r->end - r->start; int ok = 1;
-                for (uint32_t k = 0; k < n; k++) if (r->mask[k] && M[t + k] != M[r->start + k]) { ok = 0; break; }
-                if (ok) idx = (int)i;
+            uint32_t best_len = 0;
+            for (unsigned i = 0; i < g_smc_count; i++) {
+                const SmcRoutine *r = &g_smc[i]; uint32_t n = r->end - r->start;
+                if (n > best_len && smc_matches(r, t)) { idx = (int)i; best_len = n; }
             }
-            if (idx >= 0) { cache_addr[h] = t; cache_idx[h] = idx; rt_log("SMC: heap code %08x = copy of %08x", t, g_smc[idx].start); }
+            if (idx >= 0) {
+                if (cache_addr[h] != t || cache_idx[h] != idx) rt_log("SMC: heap code %08x = copy of %08x", t, g_smc[idx].start);
+                cache_addr[h] = t; cache_idx[h] = idx;
+            }
         }
         if (idx >= 0) { c->smc_delta = t - g_smc[idx].start; g_smc[idx].fn(c); return; }
     }
