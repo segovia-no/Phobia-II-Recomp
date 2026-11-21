@@ -1,0 +1,14 @@
+# Phobia II Recomp
+
+> Phobia II Recomp is an unofficial, open-source (MIT) native macOS port of the 1998 Windows 95 game Phobia II (WAH-Software). It is a static recompilation: the game's original Watcom C/C++ Win32 executable (Game.exe) from the player's own copy is translated to C and compiled into a native program, linked against a runtime that re-implements Win32 (KERNEL32, USER32, GDI32, WINMM), DirectDraw, DirectSound and DirectInput on SDL2. No emulator, no Wine.
+
+Key facts:
+- Requires the player's own copy of Phobia II v2.0 (Game.exe plus pics/, sounds/, dat/). The project contains no game code or assets.
+- Build: `./setup.sh` (Python venv with capstone + pefile, CMake, SDL2), binary at build/phobia2.
+- Recompiler: recompiler/lift.py (recursive-descent disassembly seeded by entry point and relocations, per-function C with gotos, per-flag liveness, x87 on a double stack, self-modifying mixer routines lifted with runtime-read immediates).
+
+## Docs
+- [README](README.md): overview, quick start
+- [Building](docs/dev/building.md)
+- [Architecture](docs/dev/architecture.md)
+- [Technical notes](docs/README.md)

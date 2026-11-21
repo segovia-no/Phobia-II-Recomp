@@ -1,0 +1,19 @@
+# Original game files (copyrighted) — never commit
+/game/
+*.exe
+*.EXE
+# Build output (contains C translated from Game.exe — never commit)
+build/
+build-*/
+*.o
+.DS_Store
+# Analysis scratch
+*.rea-snapshot
+*.f32
+.venv/
+__pycache__/
+*.pyc
+# Local tool / editor state
+.claude/
+.vscode/
+.idea/

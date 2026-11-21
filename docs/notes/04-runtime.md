@@ -1,0 +1,10 @@
+# 04 — Runtime
+
+- **Memory**: 4 GiB `MAP_NORESERVE` reservation; guest heap is a size-class allocator in `0x10000000–0xE0000000` serving `GlobalAlloc`, `VirtualAlloc`, guest stacks, TIBs and COM objects.
+- **Files**: DOS paths are mapped to the game folder, case-insensitively; `C:\PHOBIA2\` is the fake current directory.
+- **Window/messages**: one SDL window (1280×960, resizable, integer-free scaling of the 640×480 surface). SDL events become `WM_KEYDOWN/UP` (+ `WM_CHAR` from `TranslateMessage`), `WM_CLOSE`, `WM_ACTIVATEAPP`; the DirectInput keyboard state is updated from scancodes. `WM_CREATE` is sent during `CreateWindowExA`.
+- **DirectDraw**: surfaces are guest buffers; `Lock` hands out the guest pointer. The primary is presented on `Flip`, `Blt`/`BltFast` to it, `Unlock`, and palette changes (palette fades need no flip). 8-bit goes through the palette, 16-bit is RGB565. `WaitForVerticalBlank`/`Flip` pace to 60 Hz. Colour keys, colour fill, stretch blits, surface DCs for `GetPixel`/`SetPixel` (DDColorMatch) are supported.
+- **Audio**: one SDL float32 stereo 44.1 kHz device with a 512-frame buffer. DirectSound secondary buffers are resampled and mixed with volume/pan; `GetCurrentPosition` reports the write cursor at the end of what the device has consumed and interpolates the play cursor in time, so the game's streaming mixer never writes into data being played. waveOut buffers (CALLBACK_NULL, polled `WHDR_DONE`) are supported too.
+- **MIDI**: MCI sequencer commands drive an AudioToolbox `MusicPlayer` with the system DLS synth; end of playback posts `MM_MCINOTIFY` for looping.
+- **Threads**: the game starts worker threads with Watcom `_beginthread`; each gets a host pthread. Critical sections map to recursive pthread mutexes, events to condition variables.
+- **Std output**: a Windows GUI process has no console; writes to stdout/stderr are discarded unless `PHOBIA_CONSOLE=1` (Watcom's `matherr` reports frequent "Overflow range error in pow" there, invisible on Windows too).
