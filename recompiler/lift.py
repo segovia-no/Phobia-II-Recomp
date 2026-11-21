@@ -21,6 +21,8 @@ Model
 import sys, os, struct, collections, json
 import pefile, capstone
 from capstone import x86 as X
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from patches import PATCHES
 
 import argparse
 _ap = argparse.ArgumentParser(description='Phobia II static recompiler: Game.exe -> C')
@@ -944,7 +946,8 @@ for fi in range(NFILES):
                     continue
                 lines = []
                 try:
-                    emit_insn(ins, live.get(a, ALLF), body, e, lines, f'f_{e:x}')
+                    if a in PATCHES: lines = ['/* game-bug patch, see recompiler/patches.py */', PATCHES[a]]
+                    else: emit_insn(ins, live.get(a, ALLF), body, e, lines, f'f_{e:x}')
                 except Unsupported as ex:
                     unsupported[str(ex)] += 1
                     lines = [f'rt_unimpl(c, 0x{a:x}, "{ins.mnemonic} {ins.op_str}"); return;']

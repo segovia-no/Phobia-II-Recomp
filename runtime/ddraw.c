@@ -27,6 +27,8 @@
 #define DDSCAPS_VIDEOMEMORY 0x4000
 #define DDSCAPS_LOCALVIDMEM 0x10000000
 
+#define SURF_SLACK_ROWS 64
+
 typedef struct Surface {
     uint32_t obj;          /* guest COM object */
     int w, h, bpp, pitch;
@@ -359,7 +361,14 @@ static const char *const k_surf_names[] = {
 static uint32_t make_surface(int w, int h, int bpp, uint32_t caps, Surface **out) {
     Surface *s = calloc(1, sizeof *s);
     s->w = w; s->h = h; s->bpp = bpp; s->pitch = ((w * (bpp / 8)) + 3) & ~3; s->caps = caps; s->refs = 1;
-    s->mem = galloc((uint32_t)(s->pitch * h + 64));
+    /* The game draws slightly outside its surfaces (e.g. splats on row 480 of a 640x480 surface); on 1998
+       hardware the neighbouring bytes were spare video memory. Keep SURF_SLACK_ROWS of slack on each side
+       so those writes cannot reach other heap blocks. PHOBIA_GUARD_SURF=1 puts guard pages outside the slack. */
+    extern uint32_t guard_surface_alloc(uint32_t size);
+    uint32_t slack = (uint32_t)s->pitch * SURF_SLACK_ROWS + 4096;
+    uint32_t total = slack + (uint32_t)(s->pitch * h) + slack;
+    uint32_t base = getenv("PHOBIA_GUARD_SURF") ? guard_surface_alloc(total) : galloc(total);
+    s->mem = base + slack;
     s->obj = com_make_object(k_surf_vt, k_surf_names, 40, 0, s);
     if (out) *out = s;
     return s->obj;

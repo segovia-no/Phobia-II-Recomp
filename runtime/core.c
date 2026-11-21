@@ -171,6 +171,9 @@ uint32_t galloc(uint32_t size) {
 }
 void gfree(uint32_t p) {
     if (!p) return;
+    static int nofree = -1;
+    if (nofree < 0) nofree = getenv("PHOBIA_NOFREE") != NULL;
+    if (nofree) return;
     uint32_t blk = p - 16;
     if (RD32(blk + 12) != 0x48454150) { rt_log("WARN: gfree of non-heap pointer %08x", p); return; }
     int k = (int)RD32(blk);
@@ -308,8 +311,34 @@ void call_guest(CPU *c, uint32_t fn, int nargs, const uint32_t *args) {
 #define MAX_HOSTOBJ 4096
 static void *g_hostobj[MAX_HOSTOBJ];
 static int g_nhostobj = 1;
+/* PHOBIA_GUARD_SURF=1: surface pixels end exactly at a PROT_NONE page */
+uint32_t guard_surface_alloc(uint32_t size) {
+    static uint32_t next = 0xC0000000u;
+    uint32_t pg = (uint32_t)getpagesize();
+    uint32_t span = (size + pg - 1) / pg * pg;
+    pthread_mutex_lock(&g_heap_lock);
+    uint32_t base = next; next += span + 2 * pg;
+    pthread_mutex_unlock(&g_heap_lock);
+    mprotect(M + base, pg, PROT_READ);                 /* guard before (reads past edges are harmless) */
+    mprotect(M + base + pg + span, pg, PROT_READ);     /* guard after */
+    return base + pg + span - size;                    /* end flush against the trailing guard */
+}
+/* PHOBIA_GUARD_COM=1: every COM object on its own read-only page, so a stray guest write faults at the writer */
+static uint32_t guard_alloc(uint32_t size, int *guarded) {
+    static int on = -1; static uint32_t next = 0xE0000000u;
+    if (on < 0) on = getenv("PHOBIA_GUARD_COM") != NULL;
+    *guarded = 0;
+    if (!on) return galloc(size);
+    uint32_t pg = (uint32_t)getpagesize();
+    pthread_mutex_lock(&g_heap_lock);
+    uint32_t a = next; next += (size + pg - 1) / pg * pg;
+    pthread_mutex_unlock(&g_heap_lock);
+    *guarded = 1;
+    return a;
+}
 uint32_t com_make_object(const GuestFn *methods, const char *const *names, int n, uint32_t extra, void *host) {
-    uint32_t obj = galloc(16 + extra + 4 * n);
+    int guarded;
+    uint32_t obj = guard_alloc(16 + extra + 4 * n, &guarded);
     uint32_t vt = obj + 16 + extra;
     for (int i = 0; i < n; i++) WR32(vt + 4 * i, thunk_register(methods[i], names ? names[i] : "com"));
     WR32(obj, vt);
@@ -319,6 +348,7 @@ uint32_t com_make_object(const GuestFn *methods, const char *const *names, int n
     g_hostobj[h] = host;
     pthread_mutex_unlock(&g_thunk_lock);
     WR32(obj + 4, (uint32_t)h);
+    if (guarded) mprotect(M + (obj & ~((uint32_t)getpagesize() - 1)), (16 + extra + 4 * n + getpagesize() - 1) / getpagesize() * getpagesize(), PROT_READ);
     return obj;
 }
 void *com_host(uint32_t obj) {

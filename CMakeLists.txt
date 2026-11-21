@@ -37,7 +37,7 @@ add_custom_command(
   COMMAND "${RECOMP_PYTHON}" -I "${CMAKE_SOURCE_DIR}/recompiler/lift.py"
           "${GAME_EXE}" "${GEN_DIR}" --files ${GEN_FILE_COUNT}
           --extra "${CMAKE_SOURCE_DIR}/recompiler/extra_entries.txt"
-  DEPENDS "${GAME_EXE}" "${CMAKE_SOURCE_DIR}/recompiler/lift.py" "${CMAKE_SOURCE_DIR}/recompiler/extra_entries.txt"
+  DEPENDS "${GAME_EXE}" "${CMAKE_SOURCE_DIR}/recompiler/lift.py" "${CMAKE_SOURCE_DIR}/recompiler/patches.py" "${CMAKE_SOURCE_DIR}/recompiler/extra_entries.txt"
   COMMENT "Recompiling Game.exe to C"
   VERBATIM)
 

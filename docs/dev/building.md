@@ -37,8 +37,16 @@ Running: `build/phobia2` finds the game folder in this order: `$PHOBIA_DATA`, ne
 | `PHOBIA_AUDIO_STATS=1` | logs sound buffer creation and mixer statistics |
 | `PHOBIA_CONSOLE=1` | shows the game's stdout/stderr (a GUI app on Windows has none; Watcom's `matherr` prints there) |
 | `PHOBIA_BPP=8` / `16` | forces the display depth offered to the game |
+| `PHOBIA_GUARD_SURF=1` | write-protected guard pages around surface memory (outside the slack): a stray write faults at the writer |
+| `PHOBIA_GUARD_COM=1` | every COM object on its own read-only page |
+| `PHOBIA_NOFREE=1` | never reuse freed guest heap blocks (use-after-free hunting) |
+| `PHOBIA_HIDDEN=1` | hidden window (headless runs; combine with `SDL_AUDIODRIVER=dummy`) |
+| `PHOBIA_FPS=1` | log presents per second |
 | `PHOBIA_NOSOUND`, `PHOBIA_NOMIDI`, `PHOBIA_NO_MSGBOX`, `PHOBIA_FULLSCREEN` | as named |
 
-`scripts/dev/e2e.sh OUTDIR [seconds] [keys]` wraps keys + frame dumps; `scripts/dev/disas.py game/Game.exe 0xADDR [n]` disassembles the original.
+`scripts/dev/e2e.sh OUTDIR [seconds] [keys]` wraps keys + frame dumps; `PHOBIA_DATA=/tmp/gamecopy scripts/dev/stress.sh OUTDIR [seconds] [runs]` runs parallel headless games with scripted movement and fire (use a copy of the game folder: scripted play writes high scores); `scripts/dev/disas.py game/Game.exe 0xADDR [n]` disassembles the original.
 
 When the runtime stops with `dispatch: no compiled entry at XXXXXXXX`, add the address to `recompiler/extra_entries.txt` and rebuild.
+
+## Game-bug patches
+`recompiler/patches.py` maps a guest instruction address to replacement C. It is reserved for bugs in the original game that the faithful translation exposes (on 1998 hardware they were hidden by spare video memory or never hit). Each entry documents the bug.

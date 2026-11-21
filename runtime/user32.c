@@ -221,7 +221,7 @@ void video_init(void) {
     g_main_thread = pthread_self();
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     g_win = SDL_CreateWindow("Phobia II", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 960,
-                             SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
+                             SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (getenv("PHOBIA_HIDDEN") ? SDL_WINDOW_HIDDEN : 0));
     if (!g_win) rt_fatal("SDL_CreateWindow: %s", SDL_GetError());
     g_ren = SDL_CreateRenderer(g_win, -1, SDL_RENDERER_ACCELERATED);
     if (!g_ren) g_ren = SDL_CreateRenderer(g_win, -1, 0);
@@ -262,6 +262,11 @@ void video_present(const uint8_t *px, int w, int h, int bpp, int pitch, const ui
             SDL_SaveBMP(ss, g_shots[i].path); SDL_FreeSurface(ss);
             rt_log("saved frame %s", g_shots[i].path);
         }
+    }
+    {   static uint32_t t0, n; n++;
+        uint32_t now = SDL_GetTicks();
+        if (!t0) t0 = now;
+        if (now - t0 >= 1000) { if (getenv("PHOBIA_FPS")) rt_log("present: %u/s", n); n = 0; t0 = now; }
     }
     SDL_UpdateTexture(g_tex, NULL, g_rgba, w * 4);
     SDL_RenderClear(g_ren);
