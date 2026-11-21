@@ -20,3 +20,4 @@ Eight doubles with a top-of-stack index; `fnstsw`/`sahf` comparisons go through 
 - capstone drops the `F2` prefix on `F2 A5` (it is ambiguous with SSE2 `movsd`), so the repeat prefix is taken from the raw bytes.
 - `push`/`pop` of a segment register move 4 bytes in 32-bit code.
 - `call [esp+N]`: the target must be read before the return address is pushed.
+- capstone lists `fxch st(i)` with two operands `(st(0), st(i))`, unlike other one-operand x87 forms.

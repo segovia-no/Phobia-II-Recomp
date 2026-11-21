@@ -10,3 +10,4 @@ Bugs met in order, with the symptom that exposed each.
 | Worker called address `0x00000008` | `call [esp+0x14]` evaluated after pushing the return address | read target first |
 | Worker called heap address `0x10811718` | mixer routines copied to heap and patched | SMC mode ([03](03-self-modifying-code.md)) |
 | Crackling sound | DirectSound play/write cursors coarse (1024-frame chunks; write cursor guessed) and stderr spam slowing the mixer thread | cursor model from consumed position, 512-frame device buffer, GUI std output discarded |
+| Light effects drawn as striped rectangles; ~44 000 "Overflow range error in pow" per run | capstone lists `fxch st(1)` as `(st(0), st(1))`; the lifter took the first operand, so `fxch` did nothing and the light-map code computed `pow(2, dx)` instead of `pow(dx, 2)` | use the last operand |

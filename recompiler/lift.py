@@ -833,7 +833,8 @@ def emit_fpu(ins, mn, ops, out):
             E(f'{{ double a_ = ST(1), b_ = ST(0); ST(1) = {opf}; }}')
         if mn.endswith('p'): E('FPOP();')
     elif mn == 'fxch':
-        s = stidx(ops[0]) if ops else 1
+        # capstone lists fxch as (st(0), st(i)); the exchanged register is the last operand
+        s = stidx(ops[-1]) if ops else 1
         E(f'{{ double t_ = ST(0); ST(0) = {st(s)}; {st(s)} = t_; }}')
     elif mn == 'fchs': E('ST(0) = -ST(0);')
     elif mn == 'fabs': E('ST(0) = fabs(ST(0));')
